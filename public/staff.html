@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ventanilla - CESFAM</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body class="staff-screen">
+    <header class="staff-header">
+      <div>
+        <p class="section-label">Panel de ventanilla</p>
+        <h1 id="operatorName">Funcionario</h1>
+      </div>
+      <a class="ghost-action" href="/logout">Salir</a>
+    </header>
+
+    <main class="staff-grid">
+      <section class="current-call" aria-live="polite">
+        <p class="section-label">Llamado actual</p>
+        <div id="staffTicket" class="staff-ticket">000</div>
+        <div class="staff-window">
+          <span>Ventanilla</span>
+          <strong id="staffWindow">-</strong>
+        </div>
+        <p id="staffUpdatedAt" class="muted-line">Sin llamados registrados</p>
+      </section>
+
+      <section class="control-panel">
+        <form id="windowForm" class="form-row">
+          <label for="windowInput">Mi ventanilla</label>
+          <div class="inline-controls">
+            <input id="windowInput" name="windowNumber" type="text" inputmode="numeric" maxlength="12" autocomplete="off" required>
+            <button type="submit">Guardar</button>
+          </div>
+        </form>
+
+        <div class="action-stack">
+          <button id="nextButton" class="large-action" type="button">Siguiente número</button>
+          <button id="recallButton" class="secondary-action button-reset" type="button">Volver a llamar</button>
+        </div>
+
+        <form id="setForm" class="form-row">
+          <label for="setInput">Ajustar número</label>
+          <div class="inline-controls">
+            <input id="setInput" name="number" type="number" min="0" max="9999" step="1" required>
+            <button type="submit">Llamar</button>
+          </div>
+        </form>
+
+        <p id="statusMessage" class="status-message" role="status"></p>
+      </section>
+    </main>
+
+    <script src="/assets/staff.js"></script>
+  </body>
+</html>

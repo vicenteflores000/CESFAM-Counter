@@ -1,0 +1,14 @@
+{
+  "name": "cesfam-counter",
+  "version": "1.0.0",
+  "description": "Aplicación web para llamados de atención por ventanilla con inicio de sesión Microsoft/Outlook.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "ALLOW_DEV_LOGIN=true node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
