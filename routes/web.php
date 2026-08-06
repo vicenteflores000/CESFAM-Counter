@@ -22,6 +22,8 @@ Route::get('/events', [StateController::class, 'events']);
 Route::prefix('api')->group(function () {
     Route::get('/state', [StateController::class, 'state']);
     Route::get('/me', [StateController::class, 'me']);
+    Route::get('/sections', [StateController::class, 'sections']);
+    Route::post('/section', [StateController::class, 'setSection']);
     Route::post('/window', [StateController::class, 'setWindow']);
     Route::post('/next', [StateController::class, 'next']);
     Route::post('/recall', [StateController::class, 'recall']);

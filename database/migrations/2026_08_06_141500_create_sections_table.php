@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('windows', function (Blueprint $table) {
+        Schema::create('sections', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('section_id')->nullable()->constrained()->nullOnDelete();
-            $table->integer('window_number'); // Ventanilla 1, 2, 3, etc.
-            $table->integer('current_number')->default(0); // Último número llamado
-            $table->unique(['section_id', 'window_number']);
+            $table->string('code')->unique();
+            $table->string('name');
+            $table->integer('current_number')->default(0);
             $table->timestamps();
         });
     }
@@ -26,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('windows');
+        Schema::dropIfExists('sections');
     }
 };

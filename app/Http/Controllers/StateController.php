@@ -3,36 +3,89 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Models\Window;
 use App\Models\Call;
+use App\Models\Section;
 
 class StateController extends Controller
 {
-    public function state()
+    protected function resolveSection(): ?Section
     {
-        $windows = Window::orderBy('window_number')->get()->map(function ($w) {
-            return [
-                'windowNumber' => $w->window_number,
-                'currentNumber' => $w->current_number,
-            ];
-        })->values();
+        $sectionCode = session('sectionCode', 'SOME');
+        return Section::firstWhere('code', $sectionCode) ?? Section::firstWhere('code', 'SOME');
+    }
 
-        $lastCall = Call::orderBy('called_at', 'desc')->first();
+    protected function selectWindow(Section $section): Window
+    {
+        $wn = session('windowNumber');
 
-        $updatedAt = $lastCall ? Carbon::parse($lastCall->called_at)->toDateTimeString() : null;
-        $revision = $lastCall ? strtotime($lastCall->called_at) : 0;
-
-        $sessionWindow = session('windowNumber');
-        $currentNumber = null;
-        if ($sessionWindow) {
-            $w = Window::where('window_number', $sessionWindow)->first();
-            $currentNumber = $w ? $w->current_number : null;
+        if ($wn) {
+            return Window::firstOrCreate(
+                ['section_id' => $section->id, 'window_number' => $wn],
+                ['current_number' => $section->current_number]
+            );
         }
 
+        return Window::firstOrCreate(
+            ['section_id' => $section->id, 'window_number' => 1],
+            ['current_number' => $section->current_number]
+        );
+    }
+
+    public function sections()
+    {
+        $sections = Section::orderBy('code')->get(['code', 'name']);
+
+        return response()->json($sections);
+    }
+
+    public function setSection(Request $request)
+    {
+        $sectionCode = strtoupper(trim($request->input('sectionCode', '')));
+        $section = Section::firstWhere('code', $sectionCode);
+
+        if (! $section) {
+            return response()->json(['error' => 'Sección inválida.'], 422);
+        }
+
+        session(['sectionCode' => $section->code]);
+
+        return response()->json(['sectionCode' => $section->code]);
+    }
+
+    public function state()
+    {
+        $section = $this->resolveSection();
+
+        $windows = collect();
+        $lastCall = null;
+
+        if ($section) {
+            $windows = Window::where('section_id', $section->id)
+                ->orderBy('window_number')
+                ->get()
+                ->map(function ($w) use ($section) {
+                    return [
+                        'windowNumber' => $w->window_number,
+                        'currentNumber' => $section->current_number,
+                    ];
+                })->values();
+
+            $lastCall = Call::whereHas('window', function ($query) use ($section) {
+                $query->where('section_id', $section->id);
+            })->orderBy('called_at', 'desc')->first();
+        }
+
+        $updatedAt = $lastCall ? Carbon::parse($lastCall->called_at)->toDateTimeString() : null;
+        $revision = $section ? $section->current_number : 0;
+        $sessionWindow = session('windowNumber');
+        $currentNumber = $section ? $section->current_number : 0;
+
         return response()->json([
+            'sectionCode' => $section?->code,
+            'sectionName' => $section?->name,
             'windows' => $windows,
             'revision' => $revision,
             'updatedAt' => $updatedAt,
@@ -59,6 +112,7 @@ class StateController extends Controller
         return response()->json([
             'user' => Auth::check() ? Auth::user() : null,
             'windowNumber' => session('windowNumber'),
+            'sectionCode' => session('sectionCode', 'SOME'),
         ]);
     }
 
@@ -69,26 +123,36 @@ class StateController extends Controller
             return response()->json(['error' => 'Número de ventanilla inválido'], 422);
         }
 
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
+
         session(['windowNumber' => $num]);
 
-        // ensure window exists
-        Window::firstOrCreate(['window_number' => $num]);
+        Window::firstOrCreate(
+            ['section_id' => $section->id, 'window_number' => $num],
+            ['current_number' => $section->current_number]
+        );
 
         return $this->state();
     }
 
     public function next(Request $request)
     {
-        $wn = session('windowNumber');
-        if (!$wn) return response()->json(['error' => 'Ventanilla no configurada'], 422);
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
 
-        $window = Window::firstOrCreate(['window_number' => $wn]);
-        $window->current_number = intval($window->current_number) + 1;
-        $window->save();
+        $section->current_number = intval($section->current_number) + 1;
+        $section->save();
+
+        $window = $this->selectWindow($section);
 
         Call::create([
             'window_id' => $window->id,
-            'called_number' => $window->current_number,
+            'called_number' => $section->current_number,
             'staff_email' => Auth::check() ? Auth::user()->email : null,
         ]);
 
@@ -97,16 +161,16 @@ class StateController extends Controller
 
     public function recall(Request $request)
     {
-        $wn = session('windowNumber');
-        if (!$wn) return response()->json(['error' => 'Ventanilla no configurada'], 422);
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
 
-        $window = Window::where('window_number', $wn)->first();
-        if (!$window) return response()->json(['error' => 'Ventanilla no encontrada'], 404);
+        $window = $this->selectWindow($section);
 
-        // create a recall call entry
         Call::create([
             'window_id' => $window->id,
-            'called_number' => $window->current_number,
+            'called_number' => $section->current_number,
             'staff_email' => Auth::check() ? Auth::user()->email : null,
         ]);
 
@@ -116,13 +180,19 @@ class StateController extends Controller
     public function setNumber(Request $request)
     {
         $num = intval($request->input('number'));
-        $wn = session('windowNumber');
-        if (!$wn) return response()->json(['error' => 'Ventanilla no configurada'], 422);
-        if ($num < 0) return response()->json(['error' => 'Número inválido'], 422);
+        if ($num < 0) {
+            return response()->json(['error' => 'Número inválido'], 422);
+        }
 
-        $window = Window::firstOrCreate(['window_number' => $wn]);
-        $window->current_number = $num;
-        $window->save();
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
+
+        $section->current_number = $num;
+        $section->save();
+
+        $window = $this->selectWindow($section);
 
         Call::create([
             'window_id' => $window->id,
@@ -135,8 +205,8 @@ class StateController extends Controller
 
     public function authStatus()
     {
-        // Indicate whether auth is configured (simple check for env vars)
         $configured = env('AZURE_CLIENT_ID') && env('AZURE_CLIENT_SECRET') && env('AZURE_REDIRECT_URI');
+
         return response()->json([
             'authConfigured' => (bool) $configured,
             'devLogin' => env('APP_DEBUG', false),

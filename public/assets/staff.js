@@ -9,6 +9,8 @@ const recallButton = document.querySelector("#recallButton");
 const setForm = document.querySelector("#setForm");
 const setInput = document.querySelector("#setInput");
 const statusMessage = document.querySelector("#statusMessage");
+const sectionForm = document.querySelector("#sectionForm");
+const sectionSelect = document.querySelector("#sectionSelect");
 
 function formatNumber(value) {
   return String(Number(value) || 0).padStart(3, "0");
@@ -50,11 +52,21 @@ async function api(path, options = {}) {
   return body;
 }
 
+async function loadSections() {
+  const sections = await api("/api/sections");
+  sectionSelect.innerHTML = sections.map((section) => {
+    return `<option value="${section.code}">${section.name}</option>`;
+  }).join('');
+}
+
 async function loadMe() {
   const me = await api("/api/me");
-  operatorName.textContent = me.user.name || me.user.email || "Funcionario";
+  operatorName.textContent = (me.user && me.user.name) ? me.user.name : ((me.user && me.user.email) ? me.user.email : "Funcionario");
   if (me.windowNumber) {
     windowInput.value = me.windowNumber;
+  }
+  if (me.sectionCode) {
+    sectionSelect.value = me.sectionCode;
   }
 }
 
@@ -66,6 +78,20 @@ function connectEvents() {
   const events = new EventSource("/events");
   events.addEventListener("state", (event) => render(JSON.parse(event.data)));
 }
+
+sectionForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/section", {
+      method: "POST",
+      body: JSON.stringify({ sectionCode: sectionSelect.value })
+    });
+    setStatus(`Sección ${sectionSelect.value} seleccionada.`, "success");
+    await loadInitialState();
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
 
 windowForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -111,6 +137,11 @@ setForm.addEventListener("submit", async (event) => {
   }
 });
 
-Promise.all([loadMe(), loadInitialState()])
-  .then(connectEvents)
-  .catch((error) => setStatus(error.message, "error"));
+async function init() {
+  await loadSections();
+  await loadMe();
+  await loadInitialState();
+  connectEvents();
+}
+
+init().catch((error) => setStatus(error.message, "error"));

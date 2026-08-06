@@ -15,6 +15,16 @@
       <a class="ghost-action" href="/logout">Salir</a>
     </header>
 
+    <section class="auth-panel">
+      <form id="sectionForm" class="form-row">
+        <label for="sectionSelect">Sección</label>
+        <div class="inline-controls">
+          <select id="sectionSelect" name="sectionCode"></select>
+          <button type="submit">Cambiar</button>
+        </div>
+      </form>
+    </section>
+
     <main class="staff-grid">
       <section class="current-call" aria-live="polite">
         <p class="section-label">Llamado actual</p>
