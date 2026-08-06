@@ -397,7 +397,6 @@ input:focus {
 }
 
 .staff-window strong {
-  color: var(--amber);
   font-size: clamp(2rem, 6vw, 4rem);
   line-height: 1;
   font-variant-numeric: tabular-nums;

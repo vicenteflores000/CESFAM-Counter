@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ventanilla - CESFAM</title>
-    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="{{ asset('assets/styles.css') }}">
   </head>
   <body class="staff-screen">
     <header class="staff-header">
@@ -52,6 +52,6 @@
       </section>
     </main>
 
-    <script src="/assets/staff.js"></script>
+    <script src="{{ asset('assets/staff.js') }}"></script>
   </body>
 </html>

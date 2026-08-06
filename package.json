@@ -1,14 +1,16 @@
 {
-  "name": "cesfam-counter",
-  "version": "1.0.0",
-  "description": "Aplicación web para llamados de atención por ventanilla con inicio de sesión Microsoft/Outlook.",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "ALLOW_DEV_LOGIN=true node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "license": "UNLICENSED"
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^3.1",
+        "tailwindcss": "^4.0.0",
+        "vite": "^8.0.0"
+    }
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CESFAM - Llamado de Atención</title>
-    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="{{ asset('assets/styles.css') }}">
   </head>
   <body class="patient-screen">
     <main class="display-shell" aria-live="polite">
@@ -18,6 +18,6 @@
     </main>
 
     <a class="staff-access" href="/staff">Ingreso funcionarios</a>
-    <script src="/assets/public.js"></script>
+    <script src="{{ asset('assets/public.js') }}"></script>
   </body>
 </html>
