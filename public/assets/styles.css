@@ -488,11 +488,36 @@ input:focus {
 }
 
 @media (max-width: 460px) {
-  .inline-controls {
-    grid-template-columns: 1fr;
-  }
-
-  .ticket-number {
-    font-size: clamp(5.8rem, 30vw, 9rem);
-  }
+  .inline-controls { grid-template-columns: 1fr; }
 }
+
+/* Legacy-friendly simplified fallback for embedded browsers */
+/* The older devices may ignore advanced layout; keep styles minimal */
+
+html, body { margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background: #f7f9fb; color: #18212f; }
+.display-shell, .staff-screen { width: 100%; max-width: 1100px; margin: 12px auto; padding: 12px; }
+.display-panel, .auth-panel, .control-panel, .current-call { background: #fff; border: 1px solid #e6ebf2; border-radius: 6px; padding: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+.display-heading { display: block; margin-bottom: 8px; }
+.display-kicker { margin: 0 0 6px 0; color: #627084; font-weight: bold; text-transform: uppercase; font-size: 14px; }
+.display-time { margin: 0; color: #627084; font-size: 13px; }
+.window-cards { clear: both; overflow: hidden; }
+.window-card { display: inline-block; vertical-align: top; width: 30%; min-width: 180px; box-sizing: border-box; margin: 8px; padding: 12px; border-radius: 6px; background: #fbfcfe; border: 1px solid #e6ebf2; }
+.window-card.is-active { border-color: #167a5b; background: #f3fbf7; }
+.window-card-label { font-size: 12px; color: #627084; text-transform: uppercase; font-weight: bold; margin: 0 0 6px 0; }
+.window-card-window { font-size: 20px; margin: 0 0 6px 0; color: #18212f; }
+.window-card-number { font-size: 40px; font-weight: bold; color: #0d6048; margin: 6px 0 0 0; }
+.empty-state { text-align: center; color: #627084; font-weight: bold; padding: 20px 0; }
+.staff-header { display: block; margin-bottom: 12px; }
+.staff-header .section-label { font-size: 12px; color: #167a5b; font-weight: bold; text-transform: uppercase; }
+.staff-grid { display: block; }
+.current-call { margin-bottom: 12px; }
+.staff-ticket { font-size: 48px; font-weight: bold; color: #0d6048; margin: 8px 0; }
+.staff-window { background: #172132; color: #fff; padding: 8px; border-radius: 4px; }
+.form-row { margin: 8px 0; }
+label { display: block; margin-bottom: 4px; font-weight: bold; }
+input[type="text"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid #d8dee8; border-radius: 4px; box-sizing: border-box; }
+button { padding: 10px 12px; border: none; background: #167a5b; color: #fff; border-radius: 4px; cursor: pointer; }
+button.secondary-action { background: #eef4ff; color: #2456a6; border: 1px solid #c9daf7; }
+.status-message { padding: 8px; font-size: 13px; color: #627084; }
+@media screen and (max-width: 720px) { .window-card { width: 48%; } }
+@media screen and (max-width: 420px) { .window-card { width: 100%; } }
