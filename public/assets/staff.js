@@ -6,11 +6,15 @@ const windowForm = document.querySelector("#windowForm");
 const windowInput = document.querySelector("#windowInput");
 const nextButton = document.querySelector("#nextButton");
 const recallButton = document.querySelector("#recallButton");
+const previousButton = document.querySelector("#previousButton");
+const resetButton = document.querySelector("#resetButton");
 const setForm = document.querySelector("#setForm");
 const setInput = document.querySelector("#setInput");
 const statusMessage = document.querySelector("#statusMessage");
-const sectionForm = document.querySelector("#sectionForm");
-const sectionSelect = document.querySelector("#sectionSelect");
+const staffSectionCards = document.querySelector("#staffSectionCards");
+const windowCards = document.querySelector("#windowCards");
+const windowPanel = document.querySelector("#windowPanel");
+const globalPanel = document.querySelector("#globalPanel");
 
 function formatNumber(value) {
   return String(Number(value) || 0).padStart(3, "0");
@@ -29,6 +33,37 @@ function render(state) {
   staffWindow.textContent = state.windowNumber || "-";
   staffUpdatedAt.textContent = state.updatedAt ? `Actualizado ${formatTime(state.updatedAt)}` : "Sin llamados registrados";
   setInput.value = state.currentNumber || 0;
+
+  const buttons = staffSectionCards.querySelectorAll('.section-card');
+  buttons.forEach((button) => {
+    const code = button.dataset.section;
+    button.classList.toggle('active', code === state.sectionCode);
+  });
+
+  const windowList = state.windowNumber ? (state.windows || []) : [];
+  windowCards.innerHTML = windowList.length ? windowList.map((win) => {
+    return `
+      <div class="window-card-item ${win.windowNumber === state.windowNumber ? 'is-active' : ''}">
+        <span class="summary-small-label">Ventanilla ${win.windowNumber}</span>
+        <strong>${formatNumber(win.currentNumber)}</strong>
+      </div>
+    `;
+  }).join('') : '';
+  windowCards.classList.toggle('hidden', !state.windowNumber || !windowList.length);
+
+  const sectionSelected = state.sectionSelected === true;
+
+  if (sectionSelected) {
+    windowPanel.classList.remove('hidden');
+    if (state.windowNumber) {
+      globalPanel.classList.remove('hidden');
+    } else {
+      globalPanel.classList.add('hidden');
+    }
+  } else {
+    windowPanel.classList.add('hidden');
+    globalPanel.classList.add('hidden');
+  }
 }
 
 function setStatus(message, type = "info") {
@@ -37,8 +72,13 @@ function setStatus(message, type = "info") {
 }
 
 async function api(path, options = {}) {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content;
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      ...(token ? { "X-CSRF-TOKEN": token } : {})
+    },
     ...options
   });
   const contentType = response.headers.get("content-type") || "";
@@ -54,9 +94,35 @@ async function api(path, options = {}) {
 
 async function loadSections() {
   const sections = await api("/api/sections");
-  sectionSelect.innerHTML = sections.map((section) => {
-    return `<option value="${section.code}">${section.name}</option>`;
+
+  staffSectionCards.innerHTML = sections.map((section) => {
+    return `
+      <button type="button" class="section-card" data-section="${section.code}">
+        <span class="section-card-name">${section.name}</span>
+        <strong>${section.code}</strong>
+        <small class="section-card-hint">Toca para seleccionar</small>
+      </button>
+    `;
   }).join('');
+
+  staffSectionCards.querySelectorAll('.section-card').forEach((card) => {
+    card.addEventListener('click', async () => {
+      const code = card.dataset.section;
+      try {
+        await selectSection(code);
+      } catch (error) {
+        setStatus(error.message || 'No se pudo seleccionar la sección.', 'error');
+      }
+    });
+  });
+}
+
+async function selectSection(code) {
+  await api("/api/section", {
+    method: "POST",
+    body: JSON.stringify({ sectionCode: code })
+  });
+  await loadInitialState();
 }
 
 async function loadMe() {
@@ -64,9 +130,6 @@ async function loadMe() {
   operatorName.textContent = (me.user && me.user.name) ? me.user.name : ((me.user && me.user.email) ? me.user.email : "Funcionario");
   if (me.windowNumber) {
     windowInput.value = me.windowNumber;
-  }
-  if (me.sectionCode) {
-    sectionSelect.value = me.sectionCode;
   }
 }
 
@@ -78,20 +141,6 @@ function connectEvents() {
   const events = new EventSource("/events");
   events.addEventListener("state", (event) => render(JSON.parse(event.data)));
 }
-
-sectionForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    await api("/api/section", {
-      method: "POST",
-      body: JSON.stringify({ sectionCode: sectionSelect.value })
-    });
-    setStatus(`Sección ${sectionSelect.value} seleccionada.`, "success");
-    await loadInitialState();
-  } catch (error) {
-    setStatus(error.message, "error");
-  }
-});
 
 windowForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -115,10 +164,28 @@ nextButton.addEventListener("click", async () => {
   }
 });
 
+previousButton.addEventListener("click", async () => {
+  try {
+    render(await api("/api/previous", { method: "POST", body: "{}" }));
+    setStatus("Número anterior seleccionado.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
 recallButton.addEventListener("click", async () => {
   try {
     render(await api("/api/recall", { method: "POST", body: "{}" }));
     setStatus("Llamado repetido.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+});
+
+resetButton.addEventListener("click", async () => {
+  try {
+    render(await api("/api/reset", { method: "POST", body: "{}" }));
+    setStatus("Contador reiniciado para todas las ventanillas.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -142,6 +209,7 @@ async function init() {
   await loadMe();
   await loadInitialState();
   connectEvents();
+  setInterval(loadInitialState, 1000);
 }
 
 init().catch((error) => setStatus(error.message, "error"));

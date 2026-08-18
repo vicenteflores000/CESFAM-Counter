@@ -9,31 +9,64 @@ use App\Models\User;
 
 class AuthController extends Controller
 {
+    protected function azureConfigured(): bool
+    {
+        return ! empty(env('MICROSOFT_OAUTH_CLIENT_ID', env('AZURE_CLIENT_ID')))
+            && ! empty(env('MICROSOFT_OAUTH_CLIENT_SECRET', env('AZURE_CLIENT_SECRET')))
+            && ! empty(env('MICROSOFT_OAUTH_REDIRECT_URI', env('AZURE_REDIRECT_URI')));
+    }
+
+    protected function allowedDomains(): array
+    {
+        $domains = env('AZURE_ALLOWED_DOMAINS');
+
+        if (! empty($domains)) {
+            return array_values(array_filter(array_map(function ($item) {
+                return strtolower(trim($item));
+            }, preg_split('/[\s,;]+/', $domains))));
+        }
+
+        return ['salud.mdonihue.cl', 'mdonihue.cl'];
+    }
+
     public function redirect()
     {
-        return Socialite::driver('azure')->redirect();
+        if (! $this->azureConfigured()) {
+            return redirect('/')->with('error', 'Microsoft Azure no está configurado. Debes definir AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_REDIRECT_URI y AZURE_ALLOWED_DOMAINS.');
+        }
+
+        return Socialite::driver('microsoft')
+            ->scopes(['openid', 'profile', 'email'])
+            ->redirect();
     }
 
     public function callback()
     {
         try {
-            $azureUser = Socialite::driver('azure')->user();
-        } catch (\Exception $e) {
-            return redirect('/login')->with('error', 'Authentication failed');
+            $azureUser = Socialite::driver('microsoft')->user();
+        } catch (\Throwable $exception) {
+            return redirect('/login')->with('error', 'No se pudo iniciar sesión con Microsoft Azure.');
         }
 
-        $email = $azureUser->getEmail();
-        $domain = substr(strrchr($email, "@"), 1);
+        $email = strtolower((string) ($azureUser->getEmail()
+            ?? ($azureUser->user['mail'] ?? null)
+            ?? ($azureUser->user['userPrincipalName'] ?? null)));
 
-        if (!in_array($domain, ['salud.mdonihue.cl', 'mdonihue.cl'])) {
-            return redirect('/login')->with('error', 'Acceso denegado. Solo correos institucionales permitidos.');
+        if (empty($email)) {
+            return redirect('/login')->with('error', 'No se pudo obtener el correo institucional de Microsoft.');
+        }
+
+        $domain = substr(strrchr($email, '@'), 1);
+        if (! in_array($domain, $this->allowedDomains(), true)) {
+            return redirect('/login')->with('error', 'Acceso denegado. Solo cuentas institucionales habilitadas con Azure son permitidas.');
         }
 
         $user = User::updateOrCreate(
             ['email' => $email],
             [
-                'name' => $azureUser->getName(),
+                'name' => $azureUser->getName() ?? $azureUser->getNickname() ?? ucfirst(strstr($email, '@', true)),
                 'email_verified_at' => now(),
+                'password' => bcrypt(str()->uuid()->toString()),
             ]
         );
 
@@ -48,6 +81,6 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/login');
+        return redirect('/');
     }
 }

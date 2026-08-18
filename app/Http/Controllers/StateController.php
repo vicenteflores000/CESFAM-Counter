@@ -13,8 +13,8 @@ class StateController extends Controller
 {
     protected function resolveSection(): ?Section
     {
-        $sectionCode = session('sectionCode', 'SOME');
-        return Section::firstWhere('code', $sectionCode) ?? Section::firstWhere('code', 'SOME');
+        $sectionCode = session('sectionCode');
+        return $sectionCode ? Section::firstWhere('code', $sectionCode) : null;
     }
 
     protected function selectWindow(Section $section): Window
@@ -32,6 +32,20 @@ class StateController extends Controller
             ['section_id' => $section->id, 'window_number' => 1],
             ['current_number' => $section->current_number]
         );
+    }
+
+    protected function recordCall(Window $window, int $number): Call
+    {
+        if ($window->current_number !== $number) {
+            $window->current_number = $number;
+            $window->save();
+        }
+
+        return Call::create([
+            'window_id' => $window->id,
+            'called_number' => $number,
+            'staff_email' => Auth::check() ? Auth::user()->email : null,
+        ]);
     }
 
     public function sections()
@@ -59,17 +73,42 @@ class StateController extends Controller
     {
         $section = $this->resolveSection();
 
+        $sections = Section::with(['windows' => function ($query) {
+                $query->orderBy('window_number')->where('current_number', '>', 0);
+            }])->orderBy('code')->get(['id', 'code', 'name', 'current_number'])->map(function ($section) {
+                return [
+                    'code' => $section->code,
+                    'name' => $section->name,
+                    'currentNumber' => $section->current_number,
+                    'windows' => $section->windows->map(function ($window) {
+                        return [
+                            'windowNumber' => $window->window_number,
+                            'currentNumber' => $window->current_number,
+                        ];
+                    })->values(),
+                ];
+            });
+
         $windows = collect();
         $lastCall = null;
 
         if ($section) {
+            $sessionWindow = session('windowNumber');
+
             $windows = Window::where('section_id', $section->id)
+                ->where(function ($query) use ($sessionWindow) {
+                    $query->where('current_number', '>', 0);
+
+                    if ($sessionWindow) {
+                        $query->orWhere('window_number', $sessionWindow);
+                    }
+                })
                 ->orderBy('window_number')
                 ->get()
-                ->map(function ($w) use ($section) {
+                ->map(function ($w) {
                     return [
                         'windowNumber' => $w->window_number,
-                        'currentNumber' => $section->current_number,
+                        'currentNumber' => $w->current_number,
                     ];
                 })->values();
 
@@ -79,11 +118,13 @@ class StateController extends Controller
         }
 
         $updatedAt = $lastCall ? Carbon::parse($lastCall->called_at)->toDateTimeString() : null;
-        $revision = $section ? $section->current_number : 0;
+        $revision = md5($sections->toJson());
         $sessionWindow = session('windowNumber');
         $currentNumber = $section ? $section->current_number : 0;
 
         return response()->json([
+            'sections' => $sections,
+            'sectionSelected' => session()->has('sectionCode'),
             'sectionCode' => $section?->code,
             'sectionName' => $section?->name,
             'windows' => $windows,
@@ -92,6 +133,27 @@ class StateController extends Controller
             'windowNumber' => $sessionWindow,
             'currentNumber' => $currentNumber,
         ]);
+    }
+
+    public function previous(Request $request)
+    {
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
+
+        $section->current_number = max(0, intval($section->current_number) - 1);
+        $section->save();
+
+        $window = $this->selectWindow($section);
+
+        Call::create([
+            'window_id' => $window->id,
+            'called_number' => $section->current_number,
+            'staff_email' => Auth::check() ? Auth::user()->email : null,
+        ]);
+
+        return $this->state();
     }
 
     public function events()
@@ -112,6 +174,7 @@ class StateController extends Controller
         return response()->json([
             'user' => Auth::check() ? Auth::user() : null,
             'windowNumber' => session('windowNumber'),
+            'sectionSelected' => session()->has('sectionCode'),
             'sectionCode' => session('sectionCode', 'SOME'),
         ]);
     }
@@ -150,11 +213,7 @@ class StateController extends Controller
 
         $window = $this->selectWindow($section);
 
-        Call::create([
-            'window_id' => $window->id,
-            'called_number' => $section->current_number,
-            'staff_email' => Auth::check() ? Auth::user()->email : null,
-        ]);
+        $this->recordCall($window, $section->current_number);
 
         return $this->state();
     }
@@ -167,12 +226,9 @@ class StateController extends Controller
         }
 
         $window = $this->selectWindow($section);
+        $windowNumber = intval($window->current_number ?: $section->current_number);
 
-        Call::create([
-            'window_id' => $window->id,
-            'called_number' => $section->current_number,
-            'staff_email' => Auth::check() ? Auth::user()->email : null,
-        ]);
+        $this->recordCall($window, $windowNumber);
 
         return $this->state();
     }
@@ -194,11 +250,25 @@ class StateController extends Controller
 
         $window = $this->selectWindow($section);
 
-        Call::create([
-            'window_id' => $window->id,
-            'called_number' => $num,
-            'staff_email' => Auth::check() ? Auth::user()->email : null,
-        ]);
+        $this->recordCall($window, $num);
+
+        return $this->state();
+    }
+
+    public function reset()
+    {
+        $section = $this->resolveSection();
+        if (! $section) {
+            return response()->json(['error' => 'Sección no encontrada.'], 422);
+        }
+
+        $section->current_number = 0;
+        $section->save();
+
+        Window::where('section_id', $section->id)->update(['current_number' => 0]);
+        Call::whereHas('window', function ($query) use ($section) {
+            $query->where('section_id', $section->id);
+        })->delete();
 
         return $this->state();
     }

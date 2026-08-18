@@ -20,11 +20,13 @@ return [
         'password' => env('SES_PASSWORD'),
     ],
 
-    'azure' => [
-        'client_id' => env('AZURE_CLIENT_ID'),
-        'client_secret' => env('AZURE_CLIENT_SECRET'),
-        'redirect' => env('AZURE_REDIRECT_URI'),
-        'tenant' => env('AZURE_TENANT_ID'),
+    'microsoft' => [
+        'client_id' => env('MICROSOFT_OAUTH_CLIENT_ID', env('AZURE_CLIENT_ID')),
+        'client_secret' => env('MICROSOFT_OAUTH_CLIENT_SECRET', env('AZURE_CLIENT_SECRET')),
+        'redirect' => env('MICROSOFT_OAUTH_REDIRECT_URI', env('AZURE_REDIRECT_URI')),
+        'tenant' => env('MICROSOFT_OAUTH_TENANT', env('AZURE_TENANT_ID', 'common')),
+        'scopes' => ['openid', 'profile', 'email'],
+        'allow_silent_auth' => false,
     ],
 
 ];

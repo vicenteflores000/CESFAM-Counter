@@ -9,15 +9,14 @@
   <body class="patient-screen">
     <main class="display-shell" aria-live="polite">
       <section class="display-panel">
-        <div class="display-heading">
-          <p class="display-kicker">Llamados de atención</p>
-          <p id="updatedAt" class="display-time">Esperando ventanillas</p>
+        <p id="updatedAt" class="display-time">Esperando actualización</p>
+        <div id="sectionCards" class="section-cards"></div>
+        <div class="patient-access-wrap">
+          <a class="staff-access" href="/staff" aria-label="Acceso funcionarios">acceso funcionarios</a>
         </div>
-        <div id="windowCards" class="window-cards"></div>
       </section>
     </main>
 
-    <a class="staff-access" href="/staff">Ingreso funcionarios</a>
     <script src="{{ asset('assets/public.js') }}"></script>
   </body>
 </html>

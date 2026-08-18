@@ -1,5 +1,5 @@
 const updatedAt = document.querySelector("#updatedAt");
-const windowCards = document.querySelector("#windowCards");
+const sectionCards = document.querySelector("#sectionCards");
 let lastRevision = -1;
 
 function formatNumber(value) {
@@ -7,7 +7,7 @@ function formatNumber(value) {
 }
 
 function formatTime(value) {
-  if (!value) return "Esperando llamado";
+  if (!value) return "Esperando actualización";
   return new Intl.DateTimeFormat("es-CL", {
     hour: "2-digit",
     minute: "2-digit",
@@ -16,53 +16,89 @@ function formatTime(value) {
 }
 
 function render(state) {
-  if (!state || state.revision === lastRevision) return;
+  if (!state) return;
+  if (state.revision === lastRevision) return;
   lastRevision = state.revision;
 
-  const windows = Array.isArray(state.windows) ? state.windows : [];
-  const windowCount = Math.max(windows.length, 1);
-  windowCards.style.setProperty("--window-count", windowCount);
-  windowCards.style.setProperty("--card-number-size", `${Math.max(1.45, Math.min(8.5, 16 / windowCount))}rem`);
-  windowCards.style.setProperty("--card-window-size", `${Math.max(1, Math.min(4.2, 8 / windowCount))}rem`);
-  windowCards.style.setProperty("--card-padding", `${Math.max(6, Math.min(24, 34 / windowCount))}px`);
-  updatedAt.textContent = state.updatedAt ? `Último llamado ${formatTime(state.updatedAt)}` : "Esperando ventanillas";
-  windowCards.innerHTML = "";
+  const sections = Array.isArray(state.sections) ? state.sections : [];
+  sectionCards.innerHTML = "";
 
-  if (windows.length === 0) {
+  updatedAt.textContent = state.updatedAt ? `Última actualización ${formatTime(state.updatedAt)}` : "Esperando secciones";
+
+  const activeSections = sections.filter((section) => Array.isArray(section.windows) && section.windows.length > 0);
+
+  if (activeSections.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "Aún no hay ventanillas registradas";
-    windowCards.append(empty);
+    empty.textContent = "No hay ventanillas activas en este momento";
+    sectionCards.append(empty);
+    return;
   }
 
-  for (const item of windows) {
-    const card = document.createElement("article");
-    card.className = "window-card";
-    if (item.windowNumber === state.windowNumber) {
-      card.classList.add("is-active");
+  for (const section of activeSections) {
+    const sectionRow = document.createElement("section");
+    sectionRow.className = "section-row";
+
+    const header = document.createElement("div");
+    header.className = "section-row-header";
+
+    const windows = Array.isArray(section.windows) ? section.windows : [];
+    const sectionName = section.name.replace(/^Sección\s+/i, '').trim() || section.code;
+
+    const title = document.createElement("div");
+    title.innerHTML = `
+      <p class="section-card-title">${sectionName}</p>
+      <p class="section-card-subtitle">${windows.length} ventanilla${windows.length === 1 ? '' : 's'} activada${windows.length === 1 ? '' : 's'}</p>
+    `;
+
+    header.append(title);
+
+    const windowGrid = document.createElement("div");
+    windowGrid.className = "window-cards";
+    windowGrid.style.setProperty("--window-count", String(Math.max(1, windows.length)));
+
+    if (windows.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "Sin llamados activos";
+      windowGrid.append(empty);
+    } else {
+      for (const window of windows) {
+        const card = document.createElement("article");
+        card.className = "window-card";
+
+        const windowBlock = document.createElement("div");
+        windowBlock.className = "window-card-block";
+
+        const windowLabel = document.createElement("p");
+        windowLabel.className = "window-card-label";
+        windowLabel.textContent = "VENTANILLA";
+
+        const windowValue = document.createElement("p");
+        windowValue.className = "window-card-window";
+        windowValue.textContent = String(window.windowNumber);
+
+        const callBlock = document.createElement("div");
+        callBlock.className = "window-card-block";
+
+        const callLabel = document.createElement("p");
+        callLabel.className = "window-card-label window-card-label--secondary";
+        callLabel.textContent = "NÚMERO";
+
+        const callValue = document.createElement("p");
+        callValue.className = "window-card-number";
+        callValue.textContent = formatNumber(window.currentNumber);
+
+        windowBlock.append(windowLabel, windowValue);
+        callBlock.append(callLabel, callValue);
+        card.append(windowBlock, callBlock);
+        windowGrid.append(card);
+      }
     }
 
-    const label = document.createElement("p");
-    label.className = "window-card-label";
-    label.textContent = "Ventanilla";
-
-    const window = document.createElement("strong");
-    window.className = "window-card-window";
-    window.textContent = item.windowNumber || "-";
-
-    const numberLabel = document.createElement("p");
-    numberLabel.className = "window-card-label";
-    numberLabel.textContent = "Número";
-
-    const number = document.createElement("div");
-    number.className = "window-card-number";
-    number.textContent = item.currentNumber === null || item.currentNumber === undefined ? "---" : formatNumber(item.currentNumber);
-
-    card.append(label, window, numberLabel, number);
-    windowCards.append(card);
+    sectionRow.append(header, windowGrid);
+    sectionCards.append(sectionRow);
   }
-
-  document.body.classList.toggle("has-call", Boolean(state.windowNumber));
 }
 
 async function loadInitialState() {
@@ -80,4 +116,4 @@ function connectEvents() {
 
 loadInitialState().catch(() => {});
 connectEvents();
-setInterval(() => loadInitialState().catch(() => {}), 3000);
+setInterval(() => loadInitialState().catch(() => {}), 1000);
