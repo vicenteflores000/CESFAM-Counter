@@ -354,9 +354,11 @@ function selectSector(code) {
   }
 }
 
-changeSectorBtn?.addEventListener("click", () => {
-  selectSector(null);
-});
+if (changeSectorBtn) {
+  changeSectorBtn.addEventListener("click", function () {
+    selectSector(null);
+  });
+}
 
 function announceCall(callData) {
   if (!settings.enabled) return;
@@ -364,36 +366,36 @@ function announceCall(callData) {
 
   // Filtrado por sector: si la pantalla atiende un sector específico, ignorar llamados de otros sectores
   if (currentSectorCode && currentSectorCode !== "ALL") {
-    const targetCode = (callData.sectionCode || "").toUpperCase();
+    var targetCode = (callData.sectionCode || "").toUpperCase();
     if (targetCode !== currentSectorCode) {
       return;
     }
   }
 
-  const rawSection = (callData.sectionName || "").replace(/^Sección\s+/i, "").trim() || "Atención";
-  const sectionPhonetic = normalizePhonetics(rawSection);
-  const windowNum = callData.windowNumber || 1;
-  const isBox = (callData.stationType === "box");
-  const stationLabel = isBox ? "box" : "ventanilla";
+  var rawSection = (callData.sectionName || "").replace(/^Sección\s+/i, "").trim() || "Atención";
+  var sectionPhonetic = normalizePhonetics(rawSection);
+  var windowNum = callData.windowNumber || 1;
+  var isBox = (callData.stationType === "box");
+  var stationLabel = isBox ? "box" : "ventanilla";
 
-  const cleanWin = String(windowNum).trim();
-  let stationPhrase = "";
+  var cleanWin = String(windowNum).trim();
+  var stationPhrase = "";
   if (/^(box|ventanilla)\b/i.test(cleanWin)) {
     stationPhrase = cleanWin;
   } else {
-    stationPhrase = `${stationLabel} ${cleanWin}`;
+    stationPhrase = stationLabel + " " + cleanWin;
   }
 
-  let phrase = "";
+  var phrase = "";
   if (callData.patientName) {
-    phrase = `Paciente ${callData.patientName}, diríjase a ${stationPhrase}, ${sectionPhonetic}`;
+    phrase = "Paciente " + callData.patientName + ", diríjase a " + stationPhrase + ", " + sectionPhonetic;
   } else {
-    const number = Number(callData.calledNumber);
-    phrase = `Número ${number}, diríjase a ${stationPhrase}, ${sectionPhonetic}`;
+    var number = Number(callData.calledNumber);
+    phrase = "Número " + number + ", diríjase a " + stationPhrase + ", " + sectionPhonetic;
   }
 
   callQueue.push({
-    phrase,
+    phrase: phrase,
     sectionCode: callData.sectionCode,
     windowNumber: windowNum,
   });
@@ -423,9 +425,9 @@ function updateAudioUI() {
     }
 
     if (voiceVolume) voiceVolume.value = settings.volume;
-    if (volumeValue) volumeValue.textContent = `${Math.round(settings.volume * 100)}%`;
+    if (volumeValue) volumeValue.textContent = Math.round(settings.volume * 100) + "%";
     if (voiceRate) voiceRate.value = settings.rate;
-    if (rateValue) rateValue.textContent = `${Number(settings.rate).toFixed(2)}x`;
+    if (rateValue) rateValue.textContent = Number(settings.rate).toFixed(2) + "x";
     if (chimeToggle) chimeToggle.checked = settings.chime;
   } catch (err) {
     console.warn("Error actualizando interfaz de audio:", err);
@@ -442,7 +444,11 @@ function enableAudio() {
 function toggleAudio() {
   if (settings.enabled) {
     settings.enabled = false;
-    window.speechSynthesis?.cancel();
+    if (typeof window !== "undefined" && "speechSynthesis" in window && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
     callQueue.length = 0;
   } else {
     getAudioContext();
@@ -452,70 +458,94 @@ function toggleAudio() {
   updateAudioUI();
 }
 
-// Event Listeners de Audio
-audioToggleBtn?.addEventListener("click", toggleAudio);
-enableAudioBannerBtn?.addEventListener("click", enableAudio);
+// Event Listeners de Audio (Compatibilidad con navegadores de TV Smart Signage)
+if (audioToggleBtn) {
+  audioToggleBtn.addEventListener("click", toggleAudio);
+}
+if (enableAudioBannerBtn) {
+  enableAudioBannerBtn.addEventListener("click", enableAudio);
+}
 
-audioSettingsBtn?.addEventListener("click", () => {
-  populateVoices();
-  audioModalOverlay.classList.remove("hidden");
-});
+if (audioSettingsBtn) {
+  audioSettingsBtn.addEventListener("click", function () {
+    populateVoices();
+    if (audioModalOverlay) audioModalOverlay.classList.remove("hidden");
+  });
+}
 
-closeAudioModalBtn?.addEventListener("click", () => {
-  audioModalOverlay.classList.add("hidden");
-});
+if (closeAudioModalBtn) {
+  closeAudioModalBtn.addEventListener("click", function () {
+    if (audioModalOverlay) audioModalOverlay.classList.add("hidden");
+  });
+}
 
-saveAudioModalBtn?.addEventListener("click", () => {
-  audioModalOverlay.classList.add("hidden");
-});
+if (saveAudioModalBtn) {
+  saveAudioModalBtn.addEventListener("click", function () {
+    if (audioModalOverlay) audioModalOverlay.classList.add("hidden");
+  });
+}
 
-audioModalOverlay?.addEventListener("click", (e) => {
-  if (e.target === audioModalOverlay) {
-    audioModalOverlay.classList.add("hidden");
-  }
-});
+if (audioModalOverlay) {
+  audioModalOverlay.addEventListener("click", function (e) {
+    if (e.target === audioModalOverlay) {
+      audioModalOverlay.classList.add("hidden");
+    }
+  });
+}
 
-voiceSelect?.addEventListener("change", (e) => {
-  settings.voiceURI = e.target.value;
-  saveSettings();
-});
+if (voiceSelect) {
+  voiceSelect.addEventListener("change", function (e) {
+    settings.voiceURI = e.target.value;
+    saveSettings();
+  });
+}
 
-voiceVolume?.addEventListener("input", (e) => {
-  settings.volume = parseFloat(e.target.value);
-  volumeValue.textContent = `${Math.round(settings.volume * 100)}%`;
-  saveSettings();
-});
+if (voiceVolume) {
+  voiceVolume.addEventListener("input", function (e) {
+    settings.volume = parseFloat(e.target.value);
+    if (volumeValue) volumeValue.textContent = Math.round(settings.volume * 100) + "%";
+    saveSettings();
+  });
+}
 
-voiceRate?.addEventListener("input", (e) => {
-  settings.rate = parseFloat(e.target.value);
-  rateValue.textContent = `${Number(settings.rate).toFixed(2)}x`;
-  saveSettings();
-});
+if (voiceRate) {
+  voiceRate.addEventListener("input", function (e) {
+    settings.rate = parseFloat(e.target.value);
+    if (rateValue) rateValue.textContent = Number(settings.rate).toFixed(2) + "x";
+    saveSettings();
+  });
+}
 
-chimeToggle?.addEventListener("change", (e) => {
-  settings.chime = e.target.checked;
-  saveSettings();
-});
+if (chimeToggle) {
+  chimeToggle.addEventListener("change", function (e) {
+    settings.chime = e.target.checked;
+    saveSettings();
+  });
+}
 
-testAudioBtn?.addEventListener("click", async () => {
-  enableAudio();
-  if (settings.chime) {
-    await playChime(settings.volume);
-  }
-  await speakText(`Prueba de sonido. Número cuarenta y dos, diríjase a ventanilla uno, ${normalizePhonetics("SOME")}.`);
-});
+if (testAudioBtn) {
+  testAudioBtn.addEventListener("click", async function () {
+    enableAudio();
+    if (settings.chime) {
+      await playChime(settings.volume);
+    }
+    await speakText("Prueba de sonido. Número cuarenta y dos, diríjase a ventanilla uno, " + normalizePhonetics("SOME") + ".");
+  });
+}
 
 // Desbloquear AudioContext en cualquier interacción del usuario si el audio está habilitado
-const unlockAudio = () => {
+var unlockAudio = function () {
   if (settings.enabled) {
     getAudioContext();
     if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume().catch(() => {});
+      try {
+        audioCtx.resume().catch(function () {});
+      } catch (e) {}
     }
   }
 };
 
-["click", "touchstart", "pointerdown", "keydown"].forEach((evt) => {
+["click", "touchstart", "pointerdown", "keydown"].forEach(function (evt) {
   document.addEventListener(evt, unlockAudio, { passive: true });
 });
 
