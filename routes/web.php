@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StateController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\TTSController;
 
 Route::get('/', function () {
     $code = request()->query('code');
@@ -35,6 +36,7 @@ Route::prefix('api')->group(function () {
     Route::get('/me', [StateController::class, 'me']);
     Route::get('/sections', [StateController::class, 'sections']);
     Route::get('/auth-status', [StateController::class, 'authStatus']);
+    Route::get('/tts', [TTSController::class, 'speak']);
 
     // Authenticated staff endpoints
     Route::middleware('auth')->group(function () {

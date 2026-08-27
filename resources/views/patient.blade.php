@@ -42,6 +42,13 @@
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                 </svg>
               </button>
+              <button id="toggleDebugBtn" type="button" class="audio-icon-btn" title="Consola de Diagnóstico en Pantalla" aria-label="Diagnóstico">
+                <svg class="ui-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                  <path d="M9 9h6v6H9z"></path>
+                  <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"></path>
+                </svg>
+              </button>
             </div>
           </div>
         </header>
@@ -132,6 +139,22 @@
         <span>Haz clic para habilitar el audio y locución de llamados</span>
       </div>
       <button id="enableAudioBannerBtn" type="button" class="audio-prompt-btn">Habilitar Audio</button>
+    </div>
+
+    <!-- Consola de Diagnóstico en Pantalla (Toggleable con botón o tecla D) -->
+    <div id="debugConsole" class="debug-console hidden">
+      <div class="debug-console-header">
+        <div class="debug-console-title">
+          <span>Diagnóstico de Voz y Sistema</span>
+          <span id="debugAudioCtxState" style="color:#facc15; font-size:0.72rem;">[Audio: Inactivo]</span>
+        </div>
+        <div class="debug-console-actions">
+          <button id="debugTestAudioBtn" type="button" class="debug-btn">Probar Locución</button>
+          <button id="debugClearBtn" type="button" class="debug-btn">Limpiar</button>
+          <button id="debugCloseBtn" type="button" class="debug-btn">Cerrar</button>
+        </div>
+      </div>
+      <div id="debugLogBody" class="debug-console-body"></div>
     </div>
 
     <script src="{{ asset('assets/public.js') }}?v={{ time() }}"></script>

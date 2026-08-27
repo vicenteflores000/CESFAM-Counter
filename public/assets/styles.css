@@ -1510,6 +1510,79 @@ select:focus {
   color: #ffffff !important;
 }
 
+/* Consola de Debug en Pantalla */
+.debug-console {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 220px;
+  background: rgba(10, 20, 30, 0.95);
+  color: #a0aec0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  border-top: 2px solid #009bb0;
+}
+
+.debug-console-header {
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-console-title {
+  font-weight: 700;
+  color: #00d2ee;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-console-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.debug-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.debug-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.debug-console-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debug-entry {
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.debug-entry--info { color: #cbd5e1; }
+.debug-entry--success { color: #4ade80; }
+.debug-entry--warn { color: #facc15; }
+.debug-entry--error { color: #f87171; font-weight: 700; }
+
 @media (max-width: 780px) {
   .setup-row,
   .global-row {

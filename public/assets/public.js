@@ -23,6 +23,13 @@ var chimeToggle = document.querySelector("#chimeToggle");
 var testAudioBtn = document.querySelector("#testAudioBtn");
 var audioPromptBanner = document.querySelector("#audioPromptBanner");
 var enableAudioBannerBtn = document.querySelector("#enableAudioBannerBtn");
+var toggleDebugBtn = document.querySelector("#toggleDebugBtn");
+var debugConsole = document.querySelector("#debugConsole");
+var debugAudioCtxState = document.querySelector("#debugAudioCtxState");
+var debugTestAudioBtn = document.querySelector("#debugTestAudioBtn");
+var debugClearBtn = document.querySelector("#debugClearBtn");
+var debugCloseBtn = document.querySelector("#debugCloseBtn");
+var debugLogBody = document.querySelector("#debugLogBody");
 
 // Iconos SVG
 var ICON_SPEAKER_ON = '<svg class="ui-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
@@ -349,36 +356,106 @@ function highlightWindowCard(sectionCode, windowNumber) {
   };
 }
 
-function playVoiceAudio(phrase) {
-  return new Promise(function (resolve) {
-    var url = "/api/tts?text=" + encodeURIComponent(phrase);
-    var audio = new Audio();
-    audio.src = url;
-    audio.volume = Math.max(0, Math.min(1, Number(settings.volume) || 1.0));
+// ---------------------------------------------------------------------------
+// Logger de Diagnóstico en Pantalla
+// ---------------------------------------------------------------------------
+function logDebug(tag, message, level) {
+  var type = level || "info";
+  var d = new Date();
+  var hh = ("0" + d.getHours()).slice(-2);
+  var mm = ("0" + d.getMinutes()).slice(-2);
+  var ss = ("0" + d.getSeconds()).slice(-2);
+  var timeStr = hh + ":" + mm + ":" + ss;
 
-    var hasResolved = false;
-    var finish = function () {
-      if (!hasResolved) {
-        hasResolved = true;
-        resolve();
+  if (debugLogBody) {
+    var entry = document.createElement("div");
+    entry.className = "debug-entry debug-entry--" + type;
+    entry.textContent = "[" + timeStr + "] [" + tag + "] " + message;
+    debugLogBody.append(entry);
+    debugLogBody.scrollTop = debugLogBody.scrollHeight;
+  }
+
+  if (debugAudioCtxState) {
+    var state = (audioCtx && audioCtx.state) ? audioCtx.state : "Inactivo";
+    debugAudioCtxState.textContent = "[Audio: " + state + "]";
+    debugAudioCtxState.style.color = (state === "running") ? "#4ade80" : "#facc15";
+  }
+
+  console.log("[" + tag + "] " + message);
+}
+
+// ---------------------------------------------------------------------------
+// Reproductor Web Audio para Streaming de Voz (MP3 Decoded Buffer)
+// ---------------------------------------------------------------------------
+function playServerTTSWebAudio(phrase) {
+  return new Promise(function (resolve) {
+    logDebug("TTS", "Solicitando voz: \"" + phrase + "\"");
+    var ctx = getAudioContext();
+    if (!ctx) {
+      logDebug("TTS", "AudioContext no disponible, usando WebSpeech de respaldo", "warn");
+      speakText(phrase).then(resolve);
+      return;
+    }
+
+    var url = "/api/tts?text=" + encodeURIComponent(phrase);
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.responseType = "arraybuffer";
+
+    xhr.onload = function () {
+      if (xhr.status === 200 && xhr.response && xhr.response.byteLength > 0) {
+        logDebug("TTS", "Audio recibido (" + xhr.response.byteLength + " bytes). Decodificando...");
+
+        var onDecoded = function (audioBuffer) {
+          try {
+            logDebug("TTS", "Decodificación exitosa. Reproduciendo voz femenina...", "success");
+            var source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+
+            var gainNode = ctx.createGain();
+            var vol = Math.max(0, Math.min(1, Number(settings.volume) || 1.0));
+            gainNode.gain.setValueAtTime(vol, ctx.currentTime);
+
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            source.onended = function () {
+              logDebug("TTS", "Locución finalizada.", "success");
+              resolve();
+            };
+
+            source.start(0);
+          } catch (playErr) {
+            logDebug("TTS", "Error reproduciendo buffer: " + playErr, "error");
+            speakText(phrase).then(resolve);
+          }
+        };
+
+        var onDecodeError = function (err) {
+          logDebug("TTS", "Error decodificando audio MP3: " + err, "error");
+          speakText(phrase).then(resolve);
+        };
+
+        try {
+          var decodePromise = ctx.decodeAudioData(xhr.response, onDecoded, onDecodeError);
+          if (decodePromise && typeof decodePromise.catch === "function") {
+            decodePromise.catch(onDecodeError);
+          }
+        } catch (decErr) {
+          onDecodeError(decErr);
+        }
+      } else {
+        logDebug("TTS", "HTTP /api/tts error " + xhr.status + ". Fallback a WebSpeech.", "warn");
+        speakText(phrase).then(resolve);
       }
     };
 
-    audio.onended = finish;
-    audio.onerror = function (e) {
-      console.warn("Error en audio TTS servidor, usando WebSpeech de respaldo:", e);
-      speakText(phrase).then(finish);
+    xhr.onerror = function (e) {
+      logDebug("TTS", "Error de red al consultar /api/tts. Fallback a WebSpeech.", "error");
+      speakText(phrase).then(resolve);
     };
 
-    setTimeout(finish, 8000);
-
-    var playRes = audio.play();
-    if (playRes && typeof playRes.catch === "function") {
-      playRes.catch(function (err) {
-        console.warn("Fallo reproducción de audio:", err);
-        speakText(phrase).then(finish);
-      });
-    }
+    xhr.send();
   });
 }
 
@@ -393,48 +470,20 @@ function processQueue() {
     removeHighlight = highlightWindowCard(item.sectionCode, item.windowNumber);
   }
 
-  // Pre-cargar el audio en paralelo mientras suena la campanilla
-  var ttsUrl = "/api/tts?text=" + encodeURIComponent(item.phrase);
-  var preloadedAudio = new Audio();
-  preloadedAudio.preload = "auto";
-  preloadedAudio.src = ttsUrl;
-  preloadedAudio.volume = Math.max(0, Math.min(1, Number(settings.volume) || 1.0));
+  logDebug("LLAMADO", "Procesando llamado: " + item.phrase);
 
   var playPromise = Promise.resolve();
   if (settings.chime) {
+    logDebug("CHIME", "Reproduciendo campanilla...");
     playPromise = playChime(settings.volume);
   }
 
   playPromise
     .then(function () {
-      return new Promise(function (resolve) {
-        var hasResolved = false;
-        var finish = function () {
-          if (!hasResolved) {
-            hasResolved = true;
-            resolve();
-          }
-        };
-
-        preloadedAudio.onended = finish;
-        preloadedAudio.onerror = function (e) {
-          console.warn("Fallo pre-carga de audio servidor, usando WebSpeech:", e);
-          speakText(item.phrase).then(finish);
-        };
-
-        setTimeout(finish, 8000);
-
-        var playRes = preloadedAudio.play();
-        if (playRes && typeof playRes.catch === "function") {
-          playRes.catch(function (err) {
-            console.warn("Autoplay bloqueado en Smart TV, intentando WebSpeech:", err);
-            speakText(item.phrase).then(finish);
-          });
-        }
-      });
+      return playServerTTSWebAudio(item.phrase);
     })
     .catch(function (err) {
-      console.warn("Error procesando locución en cola:", err);
+      logDebug("QUEUE", "Error en locución: " + err, "error");
     })
     .then(function () {
       setTimeout(function () {
@@ -443,7 +492,7 @@ function processQueue() {
         if (callQueue.length > 0) {
           setTimeout(processQueue, 350);
         }
-      }, 1200);
+      }, 1000);
     });
 }
 
@@ -664,17 +713,71 @@ if (testAudioBtn) {
       p = playChime(settings.volume);
     }
     p.then(function () {
-      return playVoiceAudio(phrase);
+      return playServerTTSWebAudio(phrase);
     });
   });
 }
+
+function toggleDebugConsole() {
+  if (debugConsole) {
+    debugConsole.classList.toggle("hidden");
+    if (!debugConsole.classList.contains("hidden")) {
+      logDebug("DEBUG", "Consola de diagnóstico abierta.");
+    }
+  }
+}
+
+if (toggleDebugBtn) {
+  toggleDebugBtn.addEventListener("click", toggleDebugConsole);
+}
+
+if (debugCloseBtn) {
+  debugCloseBtn.addEventListener("click", function () {
+    if (debugConsole) debugConsole.classList.add("hidden");
+  });
+}
+
+if (debugClearBtn) {
+  debugClearBtn.addEventListener("click", function () {
+    if (debugLogBody) debugLogBody.innerHTML = "";
+  });
+}
+
+if (debugTestAudioBtn) {
+  debugTestAudioBtn.addEventListener("click", function () {
+    enableAudio();
+    var testPhrase = "Prueba de sonido. Número cuarenta y dos, diríjase a box uno, " + normalizePhonetics("SOME") + ".";
+    logDebug("TEST", "Iniciando prueba manual desde consola de diagnóstico...");
+    var p = Promise.resolve();
+    if (settings.chime) {
+      logDebug("TEST", "Tocando campanilla...");
+      p = playChime(settings.volume);
+    }
+    p.then(function () {
+      return playServerTTSWebAudio(testPhrase);
+    });
+  });
+}
+
+// Tecla 'D' para abrir o cerrar consola de diagnóstico
+document.addEventListener("keydown", function (e) {
+  if (e.key === "d" || e.key === "D") {
+    if (e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT" && e.target.tagName !== "TEXTAREA") {
+      toggleDebugConsole();
+    }
+  }
+});
 
 var unlockAudio = function () {
   if (settings.enabled) {
     getAudioContext();
     if (audioCtx && audioCtx.state === "suspended") {
       try {
-        audioCtx.resume().catch(function () {});
+        audioCtx.resume().then(function () {
+          logDebug("AUDIO", "AudioContext desbloqueado por interacción del usuario (" + audioCtx.state + ")", "success");
+        }).catch(function (err) {
+          logDebug("AUDIO", "Fallo al reanudar AudioContext: " + err, "warn");
+        });
       } catch (e) {}
     }
   }
