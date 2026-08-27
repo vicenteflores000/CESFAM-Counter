@@ -118,7 +118,22 @@ class StateController extends Controller
         }
 
         $updatedAt = $lastCall ? Carbon::parse($lastCall->called_at)->toDateTimeString() : null;
-        $revision = md5($sections->toJson());
+
+        $latestCall = Call::with('window.section')->latest('id')->first();
+        $lastCallData = $latestCall ? [
+            'id' => $latestCall->id,
+            'calledNumber' => $latestCall->called_number,
+            'windowNumber' => $latestCall->window?->window_number,
+            'sectionCode' => $latestCall->window?->section?->code,
+            'sectionName' => $latestCall->window?->section?->name,
+            'calledAt' => Carbon::parse($latestCall->called_at ?? $latestCall->created_at)->toDateTimeString(),
+        ] : null;
+
+        if (! $updatedAt && $latestCall) {
+            $updatedAt = Carbon::parse($latestCall->called_at ?? $latestCall->created_at)->toDateTimeString();
+        }
+
+        $revision = md5($sections->toJson() . ($latestCall ? $latestCall->id : ''));
         $sessionWindow = session('windowNumber');
         $currentNumber = $section ? $section->current_number : 0;
 
@@ -132,6 +147,7 @@ class StateController extends Controller
             'updatedAt' => $updatedAt,
             'windowNumber' => $sessionWindow,
             'currentNumber' => $currentNumber,
+            'lastCall' => $lastCallData,
         ]);
     }
 
@@ -147,11 +163,7 @@ class StateController extends Controller
 
         $window = $this->selectWindow($section);
 
-        Call::create([
-            'window_id' => $window->id,
-            'called_number' => $section->current_number,
-            'staff_email' => Auth::check() ? Auth::user()->email : null,
-        ]);
+        $this->recordCall($window, $section->current_number);
 
         return $this->state();
     }
