@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('windows', function (Blueprint $table) {
+        Schema::create('section_user', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('section_id')->constrained()->cascadeOnDelete();
-            $table->string('window_number', 50); // Ventanilla 1, 2, 3 o nombres de Box
-            $table->integer('current_number')->default(0); // Último número llamado
-            $table->unique(['section_id', 'window_number']);
+            $table->unique(['user_id', 'section_id']);
             $table->timestamps();
         });
     }
@@ -26,6 +25,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('windows');
+        Schema::dropIfExists('section_user');
     }
 };
+

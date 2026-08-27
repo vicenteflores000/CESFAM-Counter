@@ -1,6 +1,12 @@
 // DOM Elements
 const updatedAt = document.querySelector("#updatedAt");
 const sectionCards = document.querySelector("#sectionCards");
+const screenTitle = document.querySelector("#screenTitle");
+const activeSectorBadge = document.querySelector("#activeSectorBadge");
+const sectorBadgeName = document.querySelector("#sectorBadgeName");
+const changeSectorBtn = document.querySelector("#changeSectorBtn");
+const sectorPicker = document.querySelector("#sectorPicker");
+const sectorPickerCards = document.querySelector("#sectorPickerCards");
 const audioToggleBtn = document.querySelector("#audioToggleBtn");
 const audioIcon = document.querySelector("#audioIcon");
 const audioBtnText = document.querySelector("#audioBtnText");
@@ -26,6 +32,10 @@ let audioCtx = null;
 let voices = [];
 const callQueue = [];
 let isProcessingQueue = false;
+let lastState = null;
+
+// Sector seleccionado (variable inyectada desde la URL o nulo para mostrar listado)
+let currentSectorCode = window.PATIENT_SECTION_CODE || null;
 
 // Audio & TTS Settings (Persisted in localStorage)
 const STORAGE_KEY = "cesfam_tts_settings";
@@ -140,6 +150,17 @@ function playChime(volume = 1.0) {
 // ---------------------------------------------------------------------------
 // Web Speech API: Text-to-Speech
 // ---------------------------------------------------------------------------
+function getVoicePriority(voice) {
+  if (!voice) return 0;
+  const name = (voice.name || "").toLowerCase();
+  const lang = (voice.lang || "").toLowerCase();
+  if (name.includes("paulina")) return 100;
+  if (lang === "es-mx" || lang.startsWith("es_mx")) return 80;
+  if (lang.startsWith("es-cl") || lang.startsWith("es_cl")) return 60;
+  if (lang.startsWith("es")) return 40;
+  return 10;
+}
+
 function populateVoices() {
   if (!("speechSynthesis" in window)) return;
 
@@ -148,27 +169,32 @@ function populateVoices() {
 
   voiceSelect.innerHTML = "";
 
-  // Ordenar voces con Paulina (es-MX) en primer lugar
-  voices.sort((a, b) => getVoicePriority(b) - getVoicePriority(a));
-
+  if (!voices.length) {
+    const opt = document.createElement("option");
     opt.value = "";
     opt.textContent = "Voz predeterminada del sistema";
     voiceSelect.append(opt);
     return;
   }
 
+  // Ordenar voces con Paulina (es-MX) en primer lugar
+  voices.sort((a, b) => getVoicePriority(b) - getVoicePriority(a));
+
   voices.forEach((voice) => {
     const opt = document.createElement("option");
     opt.value = voice.voiceURI;
     opt.textContent = `${voice.name} (${voice.lang})`;
+    if (voice.voiceURI === settings.voiceURI) {
       opt.selected = true;
     }
     voiceSelect.append(opt);
+  });
 
   // Si no hay voz configurada, predeterminar Paulina (es-MX)
   if (!settings.voiceURI) {
     const defaultVoice = voices.find((v) => v.name.toLowerCase().includes("paulina"))
       || voices.find((v) => v.lang.toLowerCase() === "es-mx" || v.lang.toLowerCase().startsWith("es_mx"))
+      || voices.find((v) => v.lang.toLowerCase().startsWith("es"));
 
     if (defaultVoice) {
       settings.voiceURI = defaultVoice.voiceURI;
@@ -184,6 +210,13 @@ if ("speechSynthesis" in window) {
 
 function getSelectedVoice() {
   if (!("speechSynthesis" in window)) return null;
+  if (settings.voiceURI) {
+    const matched = voices.find((v) => v.voiceURI === settings.voiceURI);
+    if (matched) return matched;
+  }
+  const paulina = voices.find((v) => v.name.toLowerCase().includes("paulina"));
+  if (paulina) return paulina;
+
   const esMx = voices.find((v) => v.lang.toLowerCase() === "es-mx" || v.lang.toLowerCase().startsWith("es_mx"));
   if (esMx) return esMx;
 
@@ -199,9 +232,15 @@ function speakText(text) {
     }
 
     try {
-      window.speechSynthesis.cancel(); // Detener cualquier locución previa trabada
+      window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+      const voice = getSelectedVoice();
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      } else {
+        utterance.lang = "es-MX";
       }
 
       utterance.volume = Number(settings.volume) || 1.0;
@@ -222,7 +261,6 @@ function speakText(text) {
         finish();
       };
 
-      // Timeout de seguridad en caso de que el navegador no dispare onend
       setTimeout(finish, 8000);
       window.speechSynthesis.speak(utterance);
     } catch (e) {
@@ -308,16 +346,51 @@ function normalizePhonetics(text) {
   return result;
 }
 
+function selectSector(code) {
+  currentSectorCode = code ? code.toUpperCase() : null;
+  lastRevision = -1;
+  if (lastState) {
+    render(lastState);
+  }
+}
+
+changeSectorBtn?.addEventListener("click", () => {
+  selectSector(null);
+});
+
 function announceCall(callData) {
   if (!settings.enabled) return;
-  if (!callData || !callData.calledNumber) return;
+  if (!callData || (!callData.calledNumber && !callData.patientName)) return;
+
+  // Filtrado por sector: si la pantalla atiende un sector específico, ignorar llamados de otros sectores
+  if (currentSectorCode && currentSectorCode !== "ALL") {
+    const targetCode = (callData.sectionCode || "").toUpperCase();
+    if (targetCode !== currentSectorCode) {
+      return;
+    }
+  }
 
   const rawSection = (callData.sectionName || "").replace(/^Sección\s+/i, "").trim() || "Atención";
   const sectionPhonetic = normalizePhonetics(rawSection);
   const windowNum = callData.windowNumber || 1;
-  const number = Number(callData.calledNumber);
+  const isBox = (callData.stationType === "box");
+  const stationLabel = isBox ? "box" : "ventanilla";
 
-  const phrase = `Número ${number}, diríjase a ventanilla ${windowNum}, ${sectionPhonetic}`;
+  const cleanWin = String(windowNum).trim();
+  let stationPhrase = "";
+  if (/^(box|ventanilla)\b/i.test(cleanWin)) {
+    stationPhrase = cleanWin;
+  } else {
+    stationPhrase = `${stationLabel} ${cleanWin}`;
+  }
+
+  let phrase = "";
+  if (callData.patientName) {
+    phrase = `Paciente ${callData.patientName}, diríjase a ${stationPhrase}, ${sectionPhonetic}`;
+  } else {
+    const number = Number(callData.calledNumber);
+    phrase = `Número ${number}, diríjase a ${stationPhrase}, ${sectionPhonetic}`;
+  }
 
   callQueue.push({
     phrase,
@@ -361,12 +434,14 @@ function updateAudioUI() {
 
 function enableAudio() {
   getAudioContext();
+  settings.enabled = true;
   saveSettings();
   updateAudioUI();
 }
 
 function toggleAudio() {
   if (settings.enabled) {
+    settings.enabled = false;
     window.speechSynthesis?.cancel();
     callQueue.length = 0;
   } else {
@@ -449,11 +524,11 @@ const unlockAudio = () => {
 // ---------------------------------------------------------------------------
 function render(state) {
   if (!state) return;
+  lastState = state;
 
   // Detección de nuevo llamado para locución TTS
   if (state.lastCall && state.lastCall.id) {
     if (isFirstStateLoad) {
-      // En la carga inicial de la página, sincronizamos el ID sin anunciar llamados antiguos
       lastProcessedCallId = state.lastCall.id;
       isFirstStateLoad = false;
     } else if (state.lastCall.id !== lastProcessedCallId) {
@@ -464,20 +539,95 @@ function render(state) {
     isFirstStateLoad = false;
   }
 
+  const sections = Array.isArray(state.sections) ? state.sections : [];
+
+  // =========================================================================
+  // CASO 1: No hay sector seleccionado -> Mostrar selector manual de sector
+  // =========================================================================
+  if (!currentSectorCode) {
+    if (activeSectorBadge) activeSectorBadge.classList.add("hidden");
+    if (sectionCards) sectionCards.innerHTML = "";
+    if (screenTitle) screenTitle.textContent = "Seleccionar Sector";
+    if (updatedAt) updatedAt.textContent = "Elige qué sector atenderá esta pantalla";
+    if (sectorPicker) sectorPicker.classList.remove("hidden");
+
+    if (sectorPickerCards) {
+      sectorPickerCards.innerHTML = "";
+
+      sections.forEach((sec) => {
+        const isBox = (sec.stationType === "box");
+        const stationLabel = isBox ? "Box de atención" : "Ventanilla";
+        const winCount = Array.isArray(sec.windows) ? sec.windows.length : 0;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sector-picker-card";
+        btn.innerHTML = `
+          <strong class="sector-picker-card-name">${sec.name}</strong>
+          <span class="sector-picker-card-type">${stationLabel}</span>
+          <small class="sector-picker-card-info">${winCount} ${isBox ? (winCount === 1 ? 'box activo' : 'boxes activos') : (winCount === 1 ? 'ventanilla activa' : 'ventanillas activas')}</small>
+        `;
+        btn.addEventListener("click", () => {
+          selectSector(sec.code);
+        });
+        sectorPickerCards.append(btn);
+      });
+
+      // Opción para ver todos los sectores en una sola pantalla
+      const allBtn = document.createElement("button");
+      allBtn.type = "button";
+      allBtn.className = "sector-picker-card sector-picker-card--all";
+      allBtn.innerHTML = `
+        <strong class="sector-picker-card-name">Todos los Sectores</strong>
+        <span class="sector-picker-card-type">Pantalla Global</span>
+        <small class="sector-picker-card-info">Mostrar todas las atenciones activas</small>
+      `;
+      allBtn.addEventListener("click", () => {
+        selectSector("ALL");
+      });
+      sectorPickerCards.append(allBtn);
+    }
+    return;
+  }
+
+  // =========================================================================
+  // CASO 2: Sector seleccionado -> Mostrar ventanillas del sector
+  // =========================================================================
+  if (sectorPicker) sectorPicker.classList.add("hidden");
+
+  let filteredSections = sections;
+  let currentSectionObj = null;
+
+  if (currentSectorCode !== "ALL") {
+    filteredSections = sections.filter((s) => s.code.toUpperCase() === currentSectorCode.toUpperCase());
+    currentSectionObj = sections.find((s) => s.code.toUpperCase() === currentSectorCode.toUpperCase());
+  }
+
+  if (activeSectorBadge) {
+    activeSectorBadge.classList.remove("hidden");
+    if (sectorBadgeName) {
+      const displayName = currentSectionObj ? currentSectionObj.name : (currentSectorCode === "ALL" ? "Todos los Sectores" : currentSectorCode);
+      sectorBadgeName.textContent = displayName;
+    }
+  }
+
+  if (screenTitle) {
+    screenTitle.textContent = currentSectionObj ? currentSectionObj.name : (currentSectorCode === "ALL" ? "Llamado de Atención" : `Sector ${currentSectorCode}`);
+  }
+
   if (state.revision === lastRevision) return;
   lastRevision = state.revision;
 
-  const sections = Array.isArray(state.sections) ? state.sections : [];
   sectionCards.innerHTML = "";
 
-  updatedAt.textContent = state.updatedAt ? `Última actualización ${formatTime(state.updatedAt)}` : "Esperando secciones";
+  updatedAt.textContent = state.updatedAt ? `Última actualización ${formatTime(state.updatedAt)}` : "Esperando llamados";
 
-  const activeSections = sections.filter((section) => Array.isArray(section.windows) && section.windows.length > 0);
+  const activeSections = filteredSections.filter((section) => Array.isArray(section.windows) && section.windows.length > 0);
 
   if (activeSections.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "No hay ventanillas activas en este momento";
+    const sectorLabel = currentSectionObj ? currentSectionObj.name : (currentSectorCode === "ALL" ? "los sectores" : `sector ${currentSectorCode}`);
+    empty.textContent = `No hay ventanillas activas para ${sectorLabel} en este momento`;
     sectionCards.append(empty);
     return;
   }
@@ -486,19 +636,26 @@ function render(state) {
     const sectionRow = document.createElement("section");
     sectionRow.className = "section-row";
 
-    const header = document.createElement("div");
-    header.className = "section-row-header";
-
     const windows = Array.isArray(section.windows) ? section.windows : [];
     const sectionName = section.name.replace(/^Sección\s+/i, "").trim() || section.code;
+    const isBox = (section.stationType === "box");
+    const stationWord = isBox ? "box" : "ventanilla";
+    const stationWordPlural = isBox ? "boxes" : "ventanillas";
+    const stationLabelText = isBox ? "BOX" : "VENTANILLA";
 
-    const title = document.createElement("div");
-    title.innerHTML = `
-      <p class="section-card-title">${sectionName}</p>
-      <p class="section-card-subtitle">${windows.length} ventanilla${windows.length === 1 ? "" : "s"} activada${windows.length === 1 ? "" : "s"}</p>
-    `;
-
-    header.append(title);
+    // Solo mostrar cabecera de fila si es una vista global (múltiples secciones en pantalla)
+    // para evitar duplicar el nombre de la sección que ya se muestra en el encabezado principal
+    if (currentSectorCode === "ALL" || activeSections.length > 1) {
+      const header = document.createElement("div");
+      header.className = "section-row-header";
+      const title = document.createElement("div");
+      title.innerHTML = `
+        <p class="section-card-title">${sectionName}</p>
+        <p class="section-card-subtitle">${windows.length} ${windows.length === 1 ? stationWord : stationWordPlural} activad${isBox ? (windows.length === 1 ? "o" : "os") : (windows.length === 1 ? "a" : "as")}</p>
+      `;
+      header.append(title);
+      sectionRow.append(header);
+    }
 
     const windowGrid = document.createElement("div");
     windowGrid.className = "window-cards";
@@ -513,6 +670,9 @@ function render(state) {
       for (const window of windows) {
         const card = document.createElement("article");
         card.className = "window-card";
+        if (window.patientName) {
+          card.classList.add("window-card--patient");
+        }
         card.dataset.section = section.code;
         card.dataset.window = String(window.windowNumber);
 
@@ -521,10 +681,13 @@ function render(state) {
 
         const windowLabel = document.createElement("p");
         windowLabel.className = "window-card-label";
-        windowLabel.textContent = "VENTANILLA";
+        windowLabel.textContent = stationLabelText;
 
         const windowValue = document.createElement("p");
         windowValue.className = "window-card-window";
+        if (window.patientName) {
+          windowValue.classList.add("window-card-window--patient");
+        }
         windowValue.textContent = String(window.windowNumber);
 
         const callBlock = document.createElement("div");
@@ -532,11 +695,16 @@ function render(state) {
 
         const callLabel = document.createElement("p");
         callLabel.className = "window-card-label window-card-label--secondary";
-        callLabel.textContent = "NÚMERO";
+        callLabel.textContent = window.patientName ? "PACIENTE" : "NÚMERO";
 
         const callValue = document.createElement("p");
         callValue.className = "window-card-number";
-        callValue.textContent = formatNumber(window.currentNumber);
+        if (window.patientName) {
+          callValue.textContent = window.patientName;
+          callValue.classList.add("window-card-number--patient");
+        } else {
+          callValue.textContent = formatNumber(window.currentNumber);
+        }
 
         windowBlock.append(windowLabel, windowValue);
         callBlock.append(callLabel, callValue);
@@ -545,7 +713,7 @@ function render(state) {
       }
     }
 
-    sectionRow.append(header, windowGrid);
+    sectionRow.append(windowGrid);
     sectionCards.append(sectionRow);
   }
 }

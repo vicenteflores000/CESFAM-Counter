@@ -13,6 +13,8 @@ class Call extends Model
     protected $fillable = [
         'window_id',
         'called_number',
+        'patient_name',
+        'patient_identifier',
         'called_at',
         'staff_email',
     ];

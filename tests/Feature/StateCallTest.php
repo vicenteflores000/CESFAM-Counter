@@ -47,7 +47,7 @@ class StateCallTest extends TestCase
         ]);
 
         $response->assertJsonPath('lastCall.calledNumber', 42);
-        $response->assertJsonPath('lastCall.windowNumber', 3);
+        $response->assertJsonPath('lastCall.windowNumber', '3');
         $response->assertJsonPath('lastCall.sectionCode', 'FAR');
         $response->assertJsonPath('lastCall.sectionName', 'Farmacia');
     }
@@ -60,15 +60,17 @@ class StateCallTest extends TestCase
             'current_number' => 10,
         ]);
 
-        $response = $this->withSession([
+        $user = \App\Models\User::factory()->create();
+
+        $response = $this->actingAs($user)->withSession([
             'sectionCode' => 'SOME',
-            'windowNumber' => 2,
+            'windowNumber' => '2',
         ])->postJson('/api/next');
 
         $response->assertOk();
+        $response->assertJsonPath('currentNumber', 11);
         $response->assertJsonPath('lastCall.calledNumber', 11);
-        $response->assertJsonPath('lastCall.windowNumber', 2);
+        $response->assertJsonPath('lastCall.windowNumber', '2');
         $response->assertJsonPath('lastCall.sectionCode', 'SOME');
     }
 }
-

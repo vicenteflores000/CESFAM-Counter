@@ -31,7 +31,10 @@ class CounterResetTest extends TestCase
             'current_number' => 5,
         ]);
 
-        $response = $this->withSession(['sectionCode' => $section->code])
+        $user = \App\Models\User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withSession(['sectionCode' => $section->code])
             ->postJson('/api/reset');
 
         $response->assertOk();

@@ -61,14 +61,24 @@ class AuthController extends Controller
             return redirect('/login')->with('error', 'Acceso denegado. Solo cuentas institucionales habilitadas con Azure son permitidas.');
         }
 
-        $user = User::updateOrCreate(
-            ['email' => $email],
-            [
+        $hasAdmin = User::where('is_admin', true)->exists();
+
+        $user = User::firstWhere('email', $email);
+
+        if (! $user) {
+            $user = User::create([
+                'email' => $email,
                 'name' => $azureUser->getName() ?? $azureUser->getNickname() ?? ucfirst(strstr($email, '@', true)),
                 'email_verified_at' => now(),
                 'password' => bcrypt(str()->uuid()->toString()),
-            ]
-        );
+                'is_admin' => ! $hasAdmin, // Primer usuario registrado es administrador
+            ]);
+        } else {
+            $user->update([
+                'name' => $azureUser->getName() ?? $azureUser->getNickname() ?? $user->name,
+                'email_verified_at' => now(),
+            ]);
+        }
 
         Auth::login($user);
 
