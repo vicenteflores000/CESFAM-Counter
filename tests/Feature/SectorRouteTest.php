@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class SectorRouteTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_patient_view_renders_without_code(): void
     {
         $response = $this->get('/');

@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>CESFAM - Llamado de Atención</title>
-    <link rel="stylesheet" href="{{ asset('assets/styles.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/styles.css') }}?v={{ time() }}">
   </head>
   <body class="patient-screen">
     <main class="display-shell" aria-live="polite">
@@ -65,7 +65,19 @@
     </main>
 
     <script>
-      window.PATIENT_SECTION_CODE = @json($sectionCode ?? request('code'));
+      window.PATIENT_SECTION_CODE = {!! json_encode($sectionCode ?? request('code') ?? null) !!};
+      window.INITIAL_STATE = {!! json_encode($initialState ?? null) !!};
+    </script>
+
+    <div id="tvDebugError" style="display:none; position:fixed; bottom:12px; left:12px; background:rgba(220,38,38,0.92); color:#fff; padding:6px 12px; font-size:11px; border-radius:6px; z-index:999999; font-family:monospace;"></div>
+    <script>
+      window.onerror = function(msg, url, line) {
+        var el = document.getElementById("tvDebugError");
+        if (el) {
+          el.style.display = "block";
+          el.textContent = "TV Error: " + msg + " (L:" + line + ")";
+        }
+      };
     </script>
 
     <!-- Modal de Configuración de Audio / TTS -->
@@ -122,6 +134,6 @@
       <button id="enableAudioBannerBtn" type="button" class="audio-prompt-btn">Habilitar Audio</button>
     </div>
 
-    <script src="{{ asset('assets/public.js') }}"></script>
+    <script src="{{ asset('assets/public.js') }}?v={{ time() }}"></script>
   </body>
 </html>

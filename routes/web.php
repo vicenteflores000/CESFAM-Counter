@@ -7,7 +7,11 @@ use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     $code = request()->query('code');
-    return view('patient', ['sectionCode' => $code ? strtoupper($code) : null]);
+    $state = app(StateController::class)->state()->getData();
+    return view('patient', [
+        'sectionCode' => $code ? strtoupper($code) : null,
+        'initialState' => $state,
+    ]);
 });
 
 Route::middleware('auth')->group(function () {
@@ -68,9 +72,17 @@ Route::prefix('api')->group(function () {
 
 // Sector route for patient screen (e.g. /SOME, /FARMACIA, /sector/SOME)
 Route::get('/sector/{code}', function (string $code) {
-    return view('patient', ['sectionCode' => strtoupper($code)]);
+    $state = app(StateController::class)->state()->getData();
+    return view('patient', [
+        'sectionCode' => strtoupper($code),
+        'initialState' => $state,
+    ]);
 });
 
 Route::get('/{code}', function (string $code) {
-    return view('patient', ['sectionCode' => strtoupper($code)]);
+    $state = app(StateController::class)->state()->getData();
+    return view('patient', [
+        'sectionCode' => strtoupper($code),
+        'initialState' => $state,
+    ]);
 })->where('code', '^(?!staff|login|logout|events|api|auth|assets|build|favicon\.ico|robots\.txt).*$');
