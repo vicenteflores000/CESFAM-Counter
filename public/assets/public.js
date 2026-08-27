@@ -349,6 +349,39 @@ function highlightWindowCard(sectionCode, windowNumber) {
   };
 }
 
+function playVoiceAudio(phrase) {
+  return new Promise(function (resolve) {
+    var url = "/api/tts?text=" + encodeURIComponent(phrase);
+    var audio = new Audio();
+    audio.src = url;
+    audio.volume = Math.max(0, Math.min(1, Number(settings.volume) || 1.0));
+
+    var hasResolved = false;
+    var finish = function () {
+      if (!hasResolved) {
+        hasResolved = true;
+        resolve();
+      }
+    };
+
+    audio.onended = finish;
+    audio.onerror = function (e) {
+      console.warn("Error en audio TTS servidor, usando WebSpeech de respaldo:", e);
+      speakText(phrase).then(finish);
+    };
+
+    setTimeout(finish, 8000);
+
+    var playRes = audio.play();
+    if (playRes && typeof playRes.catch === "function") {
+      playRes.catch(function (err) {
+        console.warn("Fallo reproducción de audio:", err);
+        speakText(phrase).then(finish);
+      });
+    }
+  });
+}
+
 function processQueue() {
   if (isProcessingQueue || callQueue.length === 0) return;
   isProcessingQueue = true;
@@ -360,6 +393,13 @@ function processQueue() {
     removeHighlight = highlightWindowCard(item.sectionCode, item.windowNumber);
   }
 
+  // Pre-cargar el audio en paralelo mientras suena la campanilla
+  var ttsUrl = "/api/tts?text=" + encodeURIComponent(item.phrase);
+  var preloadedAudio = new Audio();
+  preloadedAudio.preload = "auto";
+  preloadedAudio.src = ttsUrl;
+  preloadedAudio.volume = Math.max(0, Math.min(1, Number(settings.volume) || 1.0));
+
   var playPromise = Promise.resolve();
   if (settings.chime) {
     playPromise = playChime(settings.volume);
@@ -367,7 +407,31 @@ function processQueue() {
 
   playPromise
     .then(function () {
-      return speakText(item.phrase);
+      return new Promise(function (resolve) {
+        var hasResolved = false;
+        var finish = function () {
+          if (!hasResolved) {
+            hasResolved = true;
+            resolve();
+          }
+        };
+
+        preloadedAudio.onended = finish;
+        preloadedAudio.onerror = function (e) {
+          console.warn("Fallo pre-carga de audio servidor, usando WebSpeech:", e);
+          speakText(item.phrase).then(finish);
+        };
+
+        setTimeout(finish, 8000);
+
+        var playRes = preloadedAudio.play();
+        if (playRes && typeof playRes.catch === "function") {
+          playRes.catch(function (err) {
+            console.warn("Autoplay bloqueado en Smart TV, intentando WebSpeech:", err);
+            speakText(item.phrase).then(finish);
+          });
+        }
+      });
     })
     .catch(function (err) {
       console.warn("Error procesando locución en cola:", err);
@@ -594,12 +658,13 @@ if (chimeToggle) {
 if (testAudioBtn) {
   testAudioBtn.addEventListener("click", function () {
     enableAudio();
+    var phrase = "Prueba de sonido. Número cuarenta y dos, diríjase a ventanilla uno, " + normalizePhonetics("SOME") + ".";
     var p = Promise.resolve();
     if (settings.chime) {
       p = playChime(settings.volume);
     }
     p.then(function () {
-      speakText("Prueba de sonido. Número cuarenta y dos, diríjase a ventanilla uno, " + normalizePhonetics("SOME") + ".");
+      return playVoiceAudio(phrase);
     });
   });
 }
